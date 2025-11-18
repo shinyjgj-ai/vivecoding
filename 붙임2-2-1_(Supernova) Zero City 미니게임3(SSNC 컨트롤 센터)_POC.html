@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero City: Energy Control POC (v4)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background: #0A0F1A;
+            color: #E0F2FE;
+            overflow: hidden;
+        }
+        .control-panel {
+            background: radial-gradient(circle, rgba(14, 27, 51, 0.9) 0%, rgba(10, 15, 26, 0.95) 100%);
+            border: 1px solid #1E40AF;
+            box-shadow: 0 0 40px rgba(30, 64, 175, 0.3), inset 0 0 20px rgba(30, 64, 175, 0.2);
+        }
+        .gauge-wrapper {
+            position: relative;
+            width: 160px;
+            height: 160px;
+        }
+        .gauge-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .holographic-text { text-shadow: 0 0 5px #38bdf8, 0 0 10px #38bdf8; }
+        input[type=range] { -webkit-appearance: none; background: transparent; width: 100%;}
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%;
+            background: #ffffff; cursor: pointer; margin-top: -10px;
+            box-shadow: 0 0 10px #fff, 0 0 20px #38bdf8;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer;
+            background: #1E40AF; border-radius: 5px;
+        }
+        #slider-container { position: relative; }
+        
+        @keyframes pulse-green {
+            0%, 100% { box-shadow: inset 0 0 10px rgba(74, 222, 128, 0.7), 0 0 5px rgba(74, 222, 128, 0.5); }
+            50% { box-shadow: inset 0 0 15px rgba(74, 222, 128, 1), 0 0 10px rgba(74, 222, 128, 0.8); }
+        }
+
+        #safe-zone {
+            position: absolute;
+            height: 100%;
+            background: rgba(22, 163, 74, 0.4);
+            border-radius: 5px;
+            top: 0;
+            transition: left 0.3s, width 0.3s;
+            animation: pulse-green 2s infinite;
+        }
+        .mission-box {
+            background: rgba(0,0,0,0.5);
+            border-left: 3px solid #F87171;
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="control-panel w-full max-w-7xl h-auto aspect-[16/9] rounded-2xl p-6 flex flex-col">
+        <!-- Header -->
+        <header class="flex justify-between items-center pb-3">
+            <div class="flex items-center gap-4">
+                <div id="earth-status" class="text-5xl">
+                    <i class="fas fa-face-smile text-green-400 transition-colors duration-500"></i>
+                </div>
+                <h1 class="text-4xl font-black tracking-widest holographic-text">ZERO CITY</h1>
+            </div>
+            <div class="flex items-center gap-6">
+                 <button id="mute-button" class="text-2xl text-slate-400 hover:text-white transition-colors">
+                    <i class="fas fa-volume-high"></i>
+                </button>
+                <div class="text-right">
+                    <p id="timer" class="text-4xl font-bold">30.0</p>
+                    <p class="text-sm text-slate-400">TIME REMAINING</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow grid grid-cols-3 gap-6">
+            <!-- Left Panel: Gauges -->
+            <div class="col-span-1 flex flex-col justify-around items-center">
+                <!-- SMR Gauge -->
+                <div class="gauge-wrapper">
+                    <canvas id="smr-gauge"></canvas>
+                    <div class="gauge-value">
+                        <p class="text-lg font-bold text-sky-400"><i class="fas fa-atom"></i> SMR</p>
+                        <p id="smr-value" class="text-3xl font-bold">120</p>
+                        <p class="text-sm text-slate-400">MW</p>
+                    </div>
+                </div>
+                 <!-- Solar Gauge -->
+                 <div class="gauge-wrapper">
+                    <canvas id="solar-gauge"></canvas>
+                    <div class="gauge-value">
+                        <p class="text-lg font-bold text-yellow-400"><i class="fas fa-sun"></i> SOLAR</p>
+                        <p id="solar-value" class="text-3xl font-bold">80</p>
+                        <p class="text-sm text-slate-400">MW</p>
+                    </div>
+                </div>
+                <!-- Wind Gauge -->
+                <div class="gauge-wrapper">
+                    <canvas id="wind-gauge"></canvas>
+                    <div class="gauge-value">
+                        <p class="text-lg font-bold text-green-400"><i class="fas fa-wind"></i> WIND</p>
+                        <p id="wind-value" class="text-3xl font-bold">40</p>
+                        <p class="text-sm text-slate-400">MW</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Graph & Controls -->
+            <div class="col-span-2 flex flex-col">
+                <div class="flex-grow h-0">
+                    <canvas id="power-chart"></canvas>
+                </div>
+                <div class="pt-4 grid grid-cols-2 gap-4 items-center">
+                    <div>
+                        <label class="text-center block mb-2">SMR POWER CONTROL</label>
+                        <div id="slider-container" class="relative h-4 w-full">
+                            <div id="safe-zone"></div>
+                            <input id="smr-slider" type="range" min="0" max="400" value="120" class="absolute w-full top-1/2 -translate-y-1/2">
+                        </div>
+                    </div>
+                    <div class="text-center bg-slate-800/50 p-2 rounded-lg">
+                        <p class="text-sm text-teal-400">CARBON REDUCED</p>
+                        <p id="carbon-value" class="text-2xl font-bold">0 <span class="text-sm">tCO₂</span></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Mission Box -->
+        <div id="mission-box" class="mission-box absolute bottom-6 right-6 p-4 rounded-lg hidden">
+            <h3 class="text-red-500 font-bold text-lg">MISSION</h3>
+            <p id="mission-text" class="text-white"></p>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="modal-start" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <h2 class="text-4xl font-bold mb-4 holographic-text">DAILY MISSION BRIEFING</h2>
+            <p id="mission-description" class="text-slate-300 mb-4 text-lg"></p>
+            <div class="bg-sky-900/50 border border-sky-700 rounded-lg p-3 mb-8 text-yellow-300">
+                <p class="font-bold">OBJECTIVE: Keep the SMR control slider inside the green SAFE ZONE!</p>
+            </div>
+            <button id="start-button" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-8 rounded-lg text-2xl transition-transform transform hover:scale-105 shadow-[0_0_15px_#0ea5e9]">ENGAGE</button>
+        </div>
+    </div>
+     <div id="modal-end" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden">
+        <div class="text-center bg-slate-900/80 backdrop-blur-sm p-8 rounded-lg border border-sky-500/50">
+            <h2 class="text-5xl font-black mb-6 holographic-text">MISSION REPORT</h2>
+            <div class="grid grid-cols-2 gap-6 mb-8 text-left">
+                <div class="bg-black/30 p-4 rounded-lg">
+                    <p class="text-sky-400 text-lg"><i class="fas fa-star"></i> ACQUIRED SUPER</p>
+                    <p id="end-super" class="text-4xl font-bold">0</p>
+                </div>
+                 <div class="bg-black/30 p-4 rounded-lg">
+                    <p class="text-teal-400 text-lg"><i class="fas fa-leaf"></i> CARBON REDUCED</p>
+                    <p id="end-carbon" class="text-4xl font-bold">0 <span class="text-xl">tCO₂</span></p>
+                </div>
+            </div>
+            <button id="completed-button" class="bg-sky-700 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-lg text-2xl transition-transform transform hover:scale-105 shadow-[0_0_15px_#0369a1]">COMPLETED</button>
+        </div>
+    </div>
+
+    <audio id="bgm" loop playsinline src="https://cdn.pixabay.com/download/audio/2022/11/21/audio_a28075317b.mp3?filename=cyberpunk-2099-127033.mp3"></audio>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const elements = {
+        smrValue: document.getElementById('smr-value'), solarValue: document.getElementById('solar-value'), windValue: document.getElementById('wind-value'),
+        timer: document.getElementById('timer'), smrSlider: document.getElementById('smr-slider'),
+        safeZone: document.getElementById('safe-zone'), missionBox: document.getElementById('mission-box'),
+        missionText: document.getElementById('mission-text'), modalStart: document.getElementById('modal-start'),
+        modalEnd: document.getElementById('modal-end'), startButton: document.getElementById('start-button'),
+        completedButton: document.getElementById('completed-button'),
+        chartCanvas: document.getElementById('power-chart'),
+        earthStatus: document.getElementById('earth-status'),
+        carbonValue: document.getElementById('carbon-value'),
+        endSuper: document.getElementById('end-super'),
+        endCarbon: document.getElementById('end-carbon'),
+        missionDescription: document.getElementById('mission-description'),
+        smrGaugeCanvas: document.getElementById('smr-gauge'),
+        solarGaugeCanvas: document.getElementById('solar-gauge'),
+        windGaugeCanvas: document.getElementById('wind-gauge'),
+        muteButton: document.getElementById('mute-button'),
+        bgm: document.getElementById('bgm'),
+    };
+
+    let gameState = {
+        gameInterval: null, lastFrameTime: 0, timeLeft: 30,
+        smr: 120, solar: 80, wind: 40, demand: 240,
+        mission: null, superEarned: 0, carbonReduced: 0,
+    };
+    
+    let gaugeCharts = {};
+
+    const MAX_POWER = { smr: 400, solar: 150, wind: 100 };
+    const SAFE_ZONE_TOLERANCE = 20; // MW
+
+    const MISSIONS = [
+        { name: "HEAT WAVE", description: "A sudden heat wave is causing a massive power surge. Keep the grid stable!", 
+          update: (time) => {
+            gameState.demand = 280 + Math.sin(time * 1.05) * 60; 
+            gameState.solar = 130 + Math.sin(time * 0.35) * 15;
+            gameState.wind = 30 + Math.cos(time * 0.63) * 10;
+        }},
+        { name: "SOLAR FLARE", description: "A solar flare is causing extreme fluctuations in solar power output!", 
+          update: (time) => {
+            gameState.demand = 220 + Math.cos(time * 0.56) * 20;
+            gameState.solar = 75 + Math.sin(time * 2.8) * 70; 
+            gameState.wind = 50 + Math.sin(time * 0.49) * 15;
+        }},
+        { name: "GRID HACK", description: "Hostile actors are attempting to destabilize the grid! Demand is unpredictable.",
+          update: (time) => {
+            gameState.demand = 250 + (Math.random() - 0.5) * 120; 
+            gameState.solar = 80 + Math.cos(time * 0.4) * 20;
+            gameState.wind = 60 + Math.sin(time * 0.5) * 20;
+        }}
+    ];
+    
+    function createDoughnutGauge(canvasEl, max, color) {
+        const gaugeData = {
+            datasets: [{
+                data: [0, max],
+                backgroundColor: [color, '#1E293B'],
+                borderWidth: 0,
+                borderRadius: 20,
+            }]
+        };
+        return new Chart(canvasEl, {
+            type: 'doughnut',
+            data: gaugeData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                cutout: '80%',
+                circumference: 270,
+                rotation: -135,
+                plugins: { tooltip: { enabled: false }, legend: { display: false } }
+            }
+        });
+    }
+    
+    function updateDoughnutGauge(chart, value, max) {
+        chart.data.datasets[0].data[0] = value;
+        chart.data.datasets[0].data[1] = Math.max(0, max - value);
+        chart.update('none');
+    }
+
+    gaugeCharts.smr = createDoughnutGauge(elements.smrGaugeCanvas, MAX_POWER.smr, '#38BDF8');
+    gaugeCharts.solar = createDoughnutGauge(elements.solarGaugeCanvas, MAX_POWER.solar, '#FACC15');
+    gaugeCharts.wind = createDoughnutGauge(elements.windGaugeCanvas, MAX_POWER.wind, '#4ADE80');
+
+
+    const chartCtx = elements.chartCanvas.getContext('2d');
+    const powerChart = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: Array(30).fill(''),
+            datasets: [
+                { label: 'SMR', data: [], borderColor: '#38BDF8', borderWidth: 2, tension: 0.4, pointRadius: 0 },
+                { label: 'Solar', data: [], borderColor: '#FACC15', borderWidth: 2, tension: 0.4, pointRadius: 0 },
+                { label: 'Wind', data: [], borderColor: '#4ADE80', borderWidth: 2, tension: 0.4, pointRadius: 0 },
+                { label: 'Total Demand', data: [], borderColor: '#F87171', borderWidth: 3, borderDash: [5, 5], tension: 0.4, pointRadius: 0 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                y: { min: 0, max: 450, ticks: { color: '#94A3B8' }, grid: { color: 'rgba(56, 189, 248, 0.1)' } },
+                x: { ticks: { display: false }, grid: { display: false } }
+            },
+            plugins: { legend: { labels: { color: '#E0F2FE', font: { family: 'Orbitron' } } } }
+        }
+    });
+
+    function updateLineChart() {
+        const data = powerChart.data;
+        data.labels.push(''); 
+        data.labels.shift();
+        
+        data.datasets[0].data.push(gameState.smr);
+        data.datasets[1].data.push(gameState.solar);
+        data.datasets[2].data.push(gameState.wind);
+        data.datasets[3].data.push(gameState.demand);
+
+        for (let i = 0; i < data.datasets.length; i++) {
+            if (data.datasets[i].data.length > 30) {
+                data.datasets[i].data.shift();
+            }
+        }
+        powerChart.update('none');
+    }
+    
+    function updateValueText(el, value) {
+        el.textContent = Math.round(value);
+    }
+
+    function updateEarthStatus(accuracy) {
+        const iconEl = elements.earthStatus.querySelector('i');
+        if (accuracy > 0.8) {
+            iconEl.className = 'fas fa-face-laugh-beam text-green-400 transition-colors duration-500';
+        } else if (accuracy > 0.4) {
+            iconEl.className = 'fas fa-face-meh text-yellow-400 transition-colors duration-500';
+        } else {
+            iconEl.className = 'fas fa-face-sad-tear text-red-400 transition-colors duration-500';
+        }
+    }
+
+    function gameLoop(timestamp) {
+        if (!gameState.gameInterval) return;
+
+        if (!gameState.lastFrameTime) gameState.lastFrameTime = timestamp;
+        const deltaTime = (timestamp - gameState.lastFrameTime) / 1000;
+        gameState.lastFrameTime = timestamp;
+        
+        gameState.timeLeft -= deltaTime;
+        const timeElapsed = 30 - gameState.timeLeft;
+        gameState.mission.update(timeElapsed);
+
+        updateDoughnutGauge(gaugeCharts.smr, gameState.smr, MAX_POWER.smr);
+        updateDoughnutGauge(gaugeCharts.solar, gameState.solar, MAX_POWER.solar);
+        updateDoughnutGauge(gaugeCharts.wind, gameState.wind, MAX_POWER.wind);
+        
+        updateValueText(elements.smrValue, gameState.smr);
+        updateValueText(elements.solarValue, gameState.solar);
+        updateValueText(elements.windValue, gameState.wind);
+        
+        updateLineChart();
+
+        const renewableSupply = gameState.solar + gameState.wind;
+        const requiredSmr = gameState.demand - renewableSupply;
+        const safeMin = requiredSmr - SAFE_ZONE_TOLERANCE;
+        const safeMax = requiredSmr + SAFE_ZONE_TOLERANCE;
+        
+        const safeZoneMinPercent = (safeMin / MAX_POWER.smr) * 100;
+        const safeZoneMaxPercent = (safeMax / MAX_POWER.smr) * 100;
+        elements.safeZone.style.left = `${safeZoneMinPercent}%`;
+        elements.safeZone.style.width = `${safeZoneMaxPercent - safeZoneMinPercent}%`;
+        
+        const deviation = Math.abs(gameState.smr - (safeMin + (safeMax - safeMin) / 2));
+        const accuracy = Math.max(0, 1 - deviation / (SAFE_ZONE_TOLERANCE * 2.5));
+
+        const superRate = accuracy * 10;
+        const carbonRate = accuracy * 5;
+
+        gameState.superEarned += superRate * deltaTime;
+        gameState.carbonReduced += carbonRate * deltaTime;
+
+        elements.carbonValue.innerHTML = `${gameState.carbonReduced.toFixed(1)} <span class="text-sm">tCO₂</span>`;
+        updateEarthStatus(accuracy);
+
+        elements.timer.textContent = gameState.timeLeft.toFixed(1);
+        if (gameState.timeLeft <= 0) {
+            endGame();
+            return;
+        }
+        requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+        elements.modalStart.classList.add('hidden');
+        elements.missionBox.classList.remove('hidden');
+        resetGame();
+        gameState.gameInterval = true;
+        requestAnimationFrame(gameLoop);
+    }
+    
+    function endGame() {
+        gameState.gameInterval = null;
+        elements.bgm.pause();
+        elements.endSuper.textContent = Math.round(gameState.superEarned);
+        elements.endCarbon.innerHTML = `${gameState.carbonReduced.toFixed(1)} <span class="text-xl">tCO₂</span>`;
+        elements.modalEnd.classList.remove('hidden');
+    }
+
+    function resetGame() {
+        gameState.timeLeft = 30;
+        gameState.lastFrameTime = 0;
+        gameState.superEarned = 0;
+        gameState.carbonReduced = 0;
+
+        gameState.mission = MISSIONS[Math.floor(Math.random() * MISSIONS.length)];
+        elements.missionDescription.textContent = gameState.mission.description;
+        elements.missionText.textContent = gameState.mission.name;
+
+        elements.smrSlider.value = 120;
+        gameState.smr = 120;
+        
+        powerChart.data.datasets.forEach(dataset => dataset.data = []);
+        powerChart.update();
+        updateEarthStatus(1);
+    }
+
+    elements.smrSlider.addEventListener('input', (e) => {
+        gameState.smr = Number(e.target.value);
+    });
+
+    elements.startButton.addEventListener('click', () => {
+        // BGM 재생은 사용자의 첫 클릭과 연결하는 것이 가장 안정적입니다.
+        if (elements.bgm.paused) {
+            elements.bgm.currentTime = 0;
+            elements.bgm.volume = 1.0;
+            elements.bgm.play().catch(e => console.error("BGM 재생 실패:", e));
+        }
+        startGame();
+    });
+
+    elements.completedButton.addEventListener('click', () => {
+        elements.modalEnd.classList.add('hidden');
+        resetGame();
+        elements.modalStart.classList.remove('hidden');
+    });
+
+    elements.muteButton.addEventListener('click', () => {
+        elements.bgm.muted = !elements.bgm.muted;
+        const icon = elements.muteButton.querySelector('i');
+        icon.className = elements.bgm.muted ? 'fas fa-volume-xmark' : 'fas fa-volume-high';
+    });
+
+    resetGame();
+});
+
+</script>
+</body>
+</html>
+
