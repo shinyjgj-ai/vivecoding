@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>미니게임: 슈퍼 퀴즈 (SUPER Quiz)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            perspective: 1000px;
+        }
+        .orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .game-container {
+            width: 90%;
+            max-width: 880px; /* 16:9 비율을 위해 너비 조정 */
+            background: #0f0f1e;
+            border-radius: 20px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16 / 9; /* 16:9 비율 강제 */
+        }
+        .header {
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .header-item {
+            font-size: 1.25rem;
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff;
+        }
+        .header-group {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .quiz-area {
+            flex-grow: 1;
+            padding: 1rem 2rem 2rem 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+        }
+        .question-panel {
+            width: 100%;
+            flex-basis: 45%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #question-text {
+            font-size: 1.75rem;
+            line-height: 1.5;
+            color: #fff;
+        }
+        .options-grid {
+            width: 100%;
+            flex-basis: 50%;
+            display: grid;
+            gap: 1rem;
+            align-content: center;
+        }
+        .option-btn {
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            padding: 1rem;
+            font-size: 1.25rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+        }
+        .option-btn:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        .option-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .option-btn.correct {
+            background: #00ff7f;
+            border-color: #00ff7f;
+            color: #1a1a2e;
+            transform: scale(1.05);
+        }
+        .option-btn.incorrect {
+            background: #ff4757;
+            border-color: #ff4757;
+            color: #fff;
+        }
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(15, 15, 30, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+            padding: 2rem;
+            flex-direction: column;
+        }
+        .modal-content {
+             transform-style: preserve-3d;
+             animation: flipIn 0.6s ease-out;
+        }
+        @keyframes flipIn {
+            from { transform: rotateY(90deg); opacity: 0; }
+            to { transform: rotateY(0deg); opacity: 1; }
+        }
+        .modal h2 {
+            font-size: 2.5rem;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            margin-bottom: 1.5rem;
+        }
+        .modal p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        .modal button {
+            background: linear-gradient(45deg, #00ffff, #1a1a2e);
+            border: 2px solid #00ffff;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            font-size: 1.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        .modal button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.7);
+        }
+        .tmi {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+        }
+        #urgentFlashOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.2);
+            pointer-events: none;
+            z-index: 99;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div id="urgentFlashOverlay" class="hidden"></div>
+    <div id="startScreen" class="modal">
+        <div class="modal-content">
+            <h2 class="orbitron">SUPER QUIZ</h2>
+            <p>SMR과 SSNC의 비밀과 친환경 기술에 대한 지식을 증명하고<br>SUPER 인증서를 획득하세요!</p>
+            <p id="playsLeftText" class="orbitron"></p>
+            <button id="startButton" class="orbitron">START QUIZ</button>
+        </div>
+    </div>
+    
+    <div id="quizScreen" class="hidden h-full flex flex-col">
+        <div class="header">
+            <div class="header-group">
+                <div id="questionCounter" class="header-item orbitron">Q 1/5</div>
+                <div id="score" class="header-item orbitron">SCORE: 0</div>
+            </div>
+            <div class="header-group">
+                <div id="dailyProgress" class="header-item orbitron">오늘: 0/5</div>
+                <div id="timer" class="header-item orbitron">TIME: 15</div>
+            </div>
+        </div>
+        <div class="quiz-area">
+            <div class="question-panel">
+                <h3 id="question-text"></h3>
+            </div>
+            <div id="options-container" class="options-grid"></div>
+        </div>
+    </div>
+
+    <div id="feedbackScreen" class="modal hidden">
+         <div class="modal-content">
+            <h2 id="feedback-title" class="orbitron"></h2>
+            <p id="feedback-text"></p>
+            <div id="tmi-container" class="tmi hidden">
+                <p id="tmi-text" class="text-sm"></p>
+            </div>
+            <button id="nextButton" class="orbitron">NEXT</button>
+        </div>
+    </div>
+    
+    <div id="endScreen" class="modal hidden">
+        <div class="modal-content">
+            <h2 class="orbitron">QUIZ COMPLETE</h2>
+            <p id="finalScore"></p>
+            <p id="superEarned"></p>
+            <button id="restartButton" class="orbitron">RESTART</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const startScreen = document.getElementById('startScreen');
+    const quizScreen = document.getElementById('quizScreen');
+    const feedbackScreen = document.getElementById('feedbackScreen');
+    const endScreen = document.getElementById('endScreen');
+    const urgentFlashOverlay = document.getElementById('urgentFlashOverlay');
+
+    const startButton = document.getElementById('startButton');
+    const nextButton = document.getElementById('nextButton');
+    const restartButton = document.getElementById('restartButton');
+
+    const playsLeftText = document.getElementById('playsLeftText');
+    const questionCounter = document.getElementById('questionCounter');
+    const dailyProgress = document.getElementById('dailyProgress');
+    const scoreDisplay = document.getElementById('score');
+    const timerDisplay = document.getElementById('timer');
+    const questionText = document.getElementById('question-text');
+    const optionsContainer = document.getElementById('options-container');
+
+    const feedbackTitle = document.getElementById('feedback-title');
+    const feedbackText = document.getElementById('feedback-text');
+    const tmiContainer = document.getElementById('tmi-container');
+    const tmiText = document.getElementById('tmi-text');
+
+    const finalScore = document.getElementById('finalScore');
+    const superEarned = document.getElementById('superEarned');
+
+    const TIME_LIMIT = 15;
+    const QUESTIONS_PER_DAY = 5;
+
+    let score = 0;
+    let currentQuestionIndex = 0;
+    let timerInterval;
+    let timeLeft = TIME_LIMIT;
+    let quizQuestions = [];
+    
+    // 실제 사실 기반 퀴즈 데이터
+    const questionBank = [
+        {
+            question: "한국에서 개발한 SMR 'SMART'는 사우디아라비아에 건설 및 인허가를 추진한 이력이 있다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "SMART는 세계 최초로 표준설계인가를 받은 SMR로, 한국 원자력 기술의 중요한 성과입니다."
+        },
+        {
+            question: "SSNC는 SMR과 태양광, 풍력 등 신재생에너지를 결합한 '스마트 에너지 시스템'을 의미한다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "SSNC는 날씨에 따라 발전량이 변하는 신재생에너지의 단점을 SMR이 보완하여, 24시간 안정적인 청정에너지 공급을 목표로 합니다."
+        },
+        {
+            question: "미국의 뉴스케일 파워(NuScale Power)가 개발한 SMR은 미국 원자력규제위원회(NRC)의 설계 인증을 최초로 받았다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "이는 SMR 기술이 상용화를 향해 나아가는 중요한 이정표가 되었습니다."
+        },
+        {
+            question: "원자력 발전은 발전 과정에서 이산화탄소를 거의 배출하지 않는다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "원자력은 우라늄의 핵분열 반응을 이용하므로, 화력발전처럼 화석연료를 태우지 않아 온실가스 감축에 기여합니다."
+        },
+        {
+            question: "다음 중 SMR을 활용하기 어려운 분야는?",
+            options: ["해수 담수화", "지역 난방 공급", "선박 추진 동력", "개인용 드론 동력"],
+            answer: 3,
+            tmi: "SMR은 '소형'이지만 여전히 도시나 대형 선박에 에너지를 공급하는 강력한 발전소입니다. 드론에 쓰기엔 너무 크죠!"
+        },
+        {
+            question: "2015년 체결되어 지구 평균 온도 상승을 1.5℃ 이내로 억제하기로 약속한 국제 기후 협약의 이름은?",
+            options: ["교토 의정서", "파리 협정", "제네바 협약", "리우 선언"],
+            answer: 1,
+            tmi: "파리 협정은 전 세계가 기후 위기 대응에 함께 참여한다는 점에서 역사적인 의미를 가집니다."
+        },
+        {
+            question: "SMR은 중력과 같은 자연 현상으로 원자로를 냉각하는 '피동형 안전계통'을 사용한다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "피동형 안전계통 덕분에 전원이 끊기는 비상 상황에서도 원자로를 안전하게 식힐 수 있어 SMR의 안전성이 크게 높습니다."
+        },
+        {
+            question: "탄소중립을 위해 이산화탄소를 포집하여 저장하거나 활용하는 기술을 무엇이라고 할까요?",
+            options: ["CCS", "NFC", "GPS", "CPU"],
+            answer: 0,
+            tmi: "CCS (Carbon Capture and Storage/Utilization) 기술은 화력발전소 등에서 배출되는 탄소를 모아 땅속 깊은 곳에 저장하거나 유용한 자원으로 바꾸는 기술입니다."
+        },
+        {
+            question: "SSNC는 전력 생산 외에도 생산된 열과 전기를 이용해 수소를 생산하는 데 활용될 수 있다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "SMR에서 나오는 고온의 열은 물을 분해하여 친환경 '그린 수소'를 생산하는 데 매우 효율적이라, 수소 경제 시대를 앞당길 기술로 주목받고 있습니다."
+        },
+        {
+            question: "i-SMR은 한국이 독자적으로 개발하고 있는 차세대 SMR의 브랜드 이름이다.",
+            options: ["O", "X"],
+            answer: 0,
+            tmi: "i-SMR은 높은 안전성과 경제성을 바탕으로 전 세계 SMR 시장을 선도하기 위해 개발되고 있습니다."
+        }
+    ];
+
+    function getDailyProgress() {
+        const today = new Date().toISOString().slice(0, 10);
+        let progress = JSON.parse(localStorage.getItem('superQuizProgress')) || {};
+        
+        if (progress.date !== today) {
+            progress = { date: today, answered: 0 };
+            localStorage.setItem('superQuizProgress', JSON.stringify(progress));
+        }
+        return progress;
+    }
+
+    function updateDailyProgress() {
+        let progress = getDailyProgress();
+        progress.answered++;
+        localStorage.setItem('superQuizProgress', JSON.stringify(progress));
+    }
+
+    function checkCanPlay() {
+        const progress = getDailyProgress();
+        const questionsLeft = QUESTIONS_PER_DAY - progress.answered;
+        playsLeftText.textContent = `오늘 남은 문제: ${questionsLeft} / ${QUESTIONS_PER_DAY}`;
+        
+        if (questionsLeft <= 0) {
+            startButton.disabled = true;
+            startButton.textContent = "내일 다시 도전하세요";
+        } else {
+            startButton.disabled = false;
+            startButton.textContent = "START QUIZ";
+        }
+        return questionsLeft;
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    function startGame() {
+        const questionsLeftThisSession = checkCanPlay();
+        if (questionsLeftThisSession <= 0) return;
+        
+        score = 0;
+        currentQuestionIndex = 0;
+        shuffleArray(questionBank);
+        quizQuestions = questionBank.slice(0, questionsLeftThisSession);
+
+        startScreen.classList.add('hidden');
+        quizScreen.style.display = 'flex';
+        
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        resetTimer();
+        const progress = getDailyProgress();
+        dailyProgress.textContent = `오늘: ${progress.answered}/${QUESTIONS_PER_DAY}`;
+        
+        const currentQuestion = quizQuestions[currentQuestionIndex];
+        
+        questionCounter.textContent = `Q ${currentQuestionIndex + 1}/${quizQuestions.length}`;
+        scoreDisplay.textContent = `SCORE: ${score}`;
+        questionText.textContent = currentQuestion.question;
+
+        optionsContainer.innerHTML = '';
+        optionsContainer.style.gridTemplateColumns = currentQuestion.options.length === 2 ? '1fr 1fr' : '1fr';
+        
+        currentQuestion.options.forEach((option, index) => {
+            const button = document.createElement('button');
+            button.textContent = option;
+            button.classList.add('option-btn', 'orbitron');
+            button.addEventListener('click', () => selectAnswer(index));
+            optionsContainer.appendChild(button);
+        });
+
+        startTimer();
+    }
+
+    function startTimer() {
+        timeLeft = TIME_LIMIT;
+        timerDisplay.textContent = `TIME: ${timeLeft}`;
+        timerDisplay.style.color = '#00ffff';
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerDisplay.textContent = `TIME: ${timeLeft}`;
+            if (timeLeft <= 5) {
+                urgentFlashOverlay.classList.remove('hidden');
+            }
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                selectAnswer(-1);
+            }
+        }, 1000);
+    }
+
+    function resetTimer() {
+        clearInterval(timerInterval);
+        urgentFlashOverlay.classList.add('hidden');
+    }
+
+    function selectAnswer(selectedIndex) {
+        resetTimer();
+        updateDailyProgress(); // 정답 여부와 관계없이 문제 풀이 횟수 차감
+        
+        const currentQuestion = quizQuestions[currentQuestionIndex];
+        const buttons = optionsContainer.querySelectorAll('.option-btn');
+        buttons.forEach(button => button.disabled = true);
+        
+        const isCorrect = selectedIndex === currentQuestion.answer;
+
+        if (isCorrect) {
+            buttons[selectedIndex].classList.add('correct');
+            score += 100 + timeLeft * 10;
+            showFeedback(true);
+        } else {
+            if (selectedIndex !== -1) {
+                buttons[selectedIndex].classList.add('incorrect');
+            }
+            buttons[currentQuestion.answer].classList.add('correct');
+            showFeedback(false);
+        }
+    }
+
+    function showFeedback(isCorrect) {
+        quizScreen.style.display = 'none';
+        feedbackScreen.classList.remove('hidden');
+        tmiContainer.classList.add('hidden');
+        
+        if(isCorrect) {
+            feedbackTitle.textContent = "CORRECT!";
+            feedbackText.textContent = "정답입니다! 지식이 +100 상승했습니다.";
+            feedbackTitle.style.color = "#00ff7f";
+        } else {
+            feedbackTitle.textContent = "INCORRECT...";
+            feedbackText.textContent = `정답은 '${quizQuestions[currentQuestionIndex].options[quizQuestions[currentQuestionIndex].answer]}' 입니다.`;
+            feedbackTitle.style.color = "#ff4757";
+            tmiContainer.classList.remove('hidden');
+            tmiText.textContent = `[TMI] ${quizQuestions[currentQuestionIndex].tmi}`;
+        }
+    }
+
+    function nextQuestion() {
+        currentQuestionIndex++;
+        if (currentQuestionIndex < quizQuestions.length) {
+            feedbackScreen.classList.add('hidden');
+            quizScreen.style.display = 'flex';
+            loadQuestion();
+        } else {
+            endGame();
+        }
+    }
+
+    function endGame() {
+        feedbackScreen.classList.add('hidden');
+        endScreen.classList.remove('hidden');
+
+        finalScore.textContent = `FINAL SCORE: ${score}`;
+        const superAmount = Math.floor(score / 50);
+        superEarned.textContent = `SUPER 인증서 획득: ${superAmount}`;
+        
+        const progress = getDailyProgress();
+        if (progress.answered >= QUESTIONS_PER_DAY) {
+            restartButton.textContent = "Completed";
+        } else {
+            restartButton.textContent = "CONTINUE";
+        }
+    }
+    
+    function restartGame() {
+        endScreen.classList.add('hidden');
+        startScreen.classList.remove('hidden');
+        restartButton.textContent = "RESTART"; // 버튼 텍스트 초기화
+        checkCanPlay();
+    }
+    
+    startButton.addEventListener('click', startGame);
+    nextButton.addEventListener('click', nextQuestion);
+    restartButton.addEventListener('click', restartGame);
+
+    checkCanPlay();
+</script>
+</body>
+</html>
+
